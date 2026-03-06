@@ -11,6 +11,8 @@ import { formatNumber } from '../utils/helpers';
 import { getCountryCoords, getCountryName } from '../utils/countryCoordinates';
 
 export default function GlobalMap() {
+    // Map UI-friendly period keys to Cloudflare API dateRange values
+    const PERIOD_MAP = { '7d': '7d', '30d': '28d', '90d': '12w' };
     const [period, setPeriod] = useState('7d');
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState(null);
@@ -24,7 +26,7 @@ export default function GlobalMap() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await getGlobalDDoS(period);
+            const res = await getGlobalDDoS(PERIOD_MAP[period]);
             setData(res.data);
 
             // Build arcs from top origins -> top targets
@@ -48,12 +50,11 @@ export default function GlobalMap() {
                 });
                 setArcsData(arcs);
 
-                // Build targets list
+                // Build targets list with real data
                 const builtTargets = targetsList.map((t, i) => ({
                     name: getCountryName(t.targetCountryAlpha2 || t.clientCountryAlpha2),
-                    events: formatNumber(parseInt(t.value) || (42391 - i * 5000)),
-                    pct: t.rank ? `${t.rank}%` : `${85 - i * 12}%`,
-                    rank: String(i + 1).padStart(2, '0'),
+                    pct: `${parseFloat(t.value).toFixed(1)}%`,
+                    rank: String(t.rank || i + 1).padStart(2, '0'),
                 }));
                 setTargets(builtTargets);
             }
@@ -99,8 +100,8 @@ export default function GlobalMap() {
                 <div className="lg:col-span-4 flex flex-col">
                     <div className="flex-1 p-8 border-b border-typo-border flex flex-col justify-center">
                         <span className="text-[10px] uppercase tracking-widest font-medium text-typo-text-light mb-4 block">Time Range</span>
-                        <div className="flex gap-4">
-                            {['7d', '30d'].map((p) => (
+                        <div className="flex gap-6">
+                            {['7d', '30d', '90d'].map((p) => (
                                 <label key={p} className="cursor-pointer group">
                                     <input
                                         type="radio"
@@ -110,11 +111,11 @@ export default function GlobalMap() {
                                         onChange={() => setPeriod(p)}
                                         className="peer sr-only"
                                     />
-                                    <span className={`text-2xl font-serif transition-all ${period === p
-                                            ? 'text-typo-text italic font-medium'
-                                            : 'text-typo-text-light group-hover:text-typo-text'
+                                    <span className={`text-2xl font-serif transition-all pb-2 inline-block border-b-2 ${period === p
+                                        ? 'text-typo-text italic font-medium border-black'
+                                        : 'text-typo-text-light border-transparent group-hover:text-typo-text group-hover:border-neutral-300'
                                         }`}>
-                                        {p === '7d' ? '7 Days' : '30 Days'}
+                                        {{ '7d': '7 Days', '30d': '30 Days', '90d': '90 Days' }[p]}
                                     </span>
                                 </label>
                             ))}
@@ -128,12 +129,51 @@ export default function GlobalMap() {
             </motion.div>
 
             {/* KPI Cards */}
-            <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-l border-t border-typo-border/20">
-                <StatsCard label="Total Attacks" value="1.2M" icon="security" change="+12.5%" subtitle="vs last week" />
-                <StatsCard label="Active Threats" value="4,521" icon="warning" change="+5.2%" subtitle="Critical Load" />
-                <StatsCard label="Bandwidth Peak" value={<>850 <span className="text-2xl italic">Gbps</span></>} icon="speed" change="+8.1%" subtitle="High Saturation" />
-                <StatsCard label="Mitigation" value="99.8%" icon="shield" change="STABLE" subtitle="Automated" />
-            </motion.div>
+            {(() => {
+                // Helper: get top 5 entries from a summary object, formatted with a label function
+                const getTop5 = (summary, formatFn) => {
+                    if (!summary) return [];
+                    return Object.entries(summary)
+                        .sort((a, b) => parseFloat(b[1]) - parseFloat(a[1]))
+                        .slice(0, 5)
+                        .map(([key, val]) => ({ name: formatFn(key), value: parseFloat(val) }));
+                };
+
+                // Format readable labels
+                const formatProtocol = (key) => key?.toUpperCase() || '—';
+                // Vector keys are already human-readable from Cloudflare (e.g., "Mirai (UDP) Flood")
+                const formatVector = (key) => key || '—';
+                const formatBitrate = (key) => {
+                    const map = {
+                        UNDER_500_MBPS: '< 500 Mbps',
+                        _500_MBPS_TO_1_GBPS: '500M–1G',
+                        _1_GBPS_TO_10_GBPS: '1–10 Gbps',
+                        _10_GBPS_TO_100_GBPS: '10–100 Gbps',
+                        OVER_100_GBPS: '100+ Gbps',
+                    };
+                    return map[key] || key?.replace(/_/g, ' ') || '—';
+                };
+                const formatDuration = (key) => {
+                    const map = {
+                        UNDER_10_MINS: '< 10 min',
+                        _10_MINS_TO_20_MINS: '10–20 min',
+                        _20_MINS_TO_40_MINS: '20–40 min',
+                        _40_MINS_TO_1_HOUR: '40–60 min',
+                        _1_HOUR_TO_3_HOURS: '1–3 hours',
+                        OVER_3_HOURS: '3+ hours',
+                    };
+                    return map[key] || key?.replace(/_/g, ' ') || '—';
+                };
+
+                return (
+                    <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-l border-t border-typo-border/20">
+                        <StatsCard label="Protocols" icon="lan" items={getTop5(data?.protocol, formatProtocol)} />
+                        <StatsCard label="Attack Vectors" icon="bolt" items={getTop5(data?.vector, formatVector)} />
+                        <StatsCard label="Attack Size" icon="speed" items={getTop5(data?.bitrate, formatBitrate)} />
+                        <StatsCard label="Attack Duration" icon="timer" items={getTop5(data?.duration, formatDuration)} />
+                    </motion.div>
+                );
+            })()}
 
             {/* Globe + Top Targets */}
             <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="grid grid-cols-1 lg:grid-cols-3 border-b border-l border-typo-border/20">
@@ -143,8 +183,8 @@ export default function GlobalMap() {
 
             {/* Charts Row */}
             <motion.div {...fadeIn} transition={{ delay: 0.3 }} className="grid grid-cols-1 lg:grid-cols-2 border-l border-t border-typo-border/20">
-                <AttackDonutChart />
-                <VolumeBarChart />
+                <AttackDonutChart origins={data?.topOrigins} />
+                <VolumeBarChart timeseries={data?.timeseries} period={period} />
             </motion.div>
 
             {/* Loading overlay */}

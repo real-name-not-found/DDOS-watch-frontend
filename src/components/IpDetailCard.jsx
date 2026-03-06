@@ -11,7 +11,7 @@ export default function IpDetailCard({ data }) {
             <div className="mb-auto">
                 <div className="flex justify-between items-start mb-6">
                     <span className="text-[10px] uppercase tracking-widest text-neutral-400">Target</span>
-                    <span className="text-[10px] border border-black px-1.5 py-0.5 uppercase">IPv4</span>
+                    <span className="text-[11px] bg-black text-white px-2.5 py-1 uppercase font-bold tracking-wider">IPv{data?.ipVersion || 4}</span>
                 </div>
                 <div className="flex items-center gap-3 mb-2">
                     {countryCode && (
