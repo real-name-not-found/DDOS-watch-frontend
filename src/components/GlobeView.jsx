@@ -1,116 +1,267 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { getCountryCoord } from '../data/countryCoords';
 
-export default function GlobeView({ arcsData = [] }) {
+function weightedPick(items) {
+    if (!items || !items.length) return null;
+    const total = items.reduce((s, it) => s + parseFloat(it.value), 0);
+    let r = Math.random() * total;
+    for (const it of items) {
+        r -= parseFloat(it.value);
+        if (r <= 0) return it;
+    }
+    return items[0];
+}
+
+let _id = 0;
+
+export default function GlobeView({ attackPairs = [], origins = [], targets = [], vectors = {} }) {
     const globeEl = useRef(null);
     const containerRef = useRef(null);
     const [Globe, setGlobe] = useState(null);
-    const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+    const [dims, setDims] = useState({ width: 800, height: 600 });
+    const [arcs, setArcs] = useState([]);
+    const [points, setPoints] = useState([]);
+    const [rings, setRings] = useState([]);
+    const [events, setEvents] = useState([]);
+    const [latest, setLatest] = useState(null);
+    const timersRef = useRef([]);
 
-    // Dynamic import of react-globe.gl (it's heavy and uses WebGL)
     useEffect(() => {
-        import('react-globe.gl').then((mod) => {
-            setGlobe(() => mod.default);
-        });
+        import('react-globe.gl').then((mod) => setGlobe(() => mod.default));
     }, []);
 
-    // Resize observer
     useEffect(() => {
         if (!containerRef.current) return;
-        const observer = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                setDimensions({
-                    width: entry.contentRect.width,
-                    height: entry.contentRect.height,
-                });
-            }
+        const obs = new ResizeObserver((entries) => {
+            const { width, height } = entries[0].contentRect;
+            setDims({ width, height });
         });
-        observer.observe(containerRef.current);
-        return () => observer.disconnect();
+        obs.observe(containerRef.current);
+        return () => obs.disconnect();
     }, []);
 
-    // Configure globe after mount
     useEffect(() => {
         if (!globeEl.current) return;
-        const controls = globeEl.current.controls();
-        if (controls) {
-            controls.autoRotate = true;
-            controls.autoRotateSpeed = 0.5;
-            controls.enableZoom = true;
+        const c = globeEl.current.controls();
+        if (c) {
+            c.autoRotate = true;
+            c.autoRotateSpeed = 0.3;
+            c.enableZoom = true;
         }
-        // Set initial point of view
-        globeEl.current.pointOfView({ lat: 25, lng: 10, altitude: 2.2 }, 1000);
+        globeEl.current.pointOfView({ lat: 20, lng: 0, altitude: 2.0 }, 1000);
     }, [Globe]);
 
-    // Generate mock arcs if no real data
-    const defaultArcs = [
-        { startLat: 35, startLng: 105, endLat: 38, endLng: -97, color: ['rgba(255,255,255,0.6)', 'rgba(255,255,255,0.1)'] },
-        { startLat: 60, startLng: 100, endLat: 51, endLng: 9, color: ['rgba(255,255,255,0.6)', 'rgba(255,255,255,0.1)'] },
-        { startLat: -14, startLng: -51, endLat: 38, endLng: -97, color: ['rgba(255,255,255,0.6)', 'rgba(255,255,255,0.1)'] },
-        { startLat: 20, startLng: 77, endLat: 55, endLng: -3, color: ['rgba(255,255,255,0.6)', 'rgba(255,255,255,0.1)'] },
-        { startLat: 36, startLng: 138, endLat: 38, endLng: -97, color: ['rgba(255,255,255,0.4)', 'rgba(255,255,255,0.05)'] },
-        { startLat: 14, startLng: 108, endLat: 52, endLng: 5, color: ['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.1)'] },
-        { startLat: 35, startLng: 105, endLat: 36, endLng: 128, color: ['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.1)'] },
-        { startLat: 39, startLng: 35, endLat: -25, endLng: 133, color: ['rgba(255,255,255,0.4)', 'rgba(255,255,255,0.05)'] },
-    ];
+    const vectorList = useMemo(() =>
+        Object.entries(vectors)
+            .filter(([k]) => k !== 'other')
+            .map(([name, value]) => ({ name, value: parseFloat(value) }))
+            .sort((a, b) => b.value - a.value),
+        [vectors]
+    );
 
-    const finalArcs = arcsData.length > 0 ? arcsData : defaultArcs;
+    // Spawn one attack
+    const spawn = useCallback(() => {
+        let srcCode, srcName, dstCode, dstName;
+
+        // Verify we have real pair data
+        if (attackPairs.length > 0) {
+            const pair = weightedPick(attackPairs);
+            srcCode = pair.originCountryAlpha2;
+            srcName = pair.originCountryName;
+            dstCode = pair.targetCountryAlpha2;
+            dstName = pair.targetCountryName;
+        } else if (origins.length > 0 && targets.length > 0) {
+            // Fallback if pairs fail to load
+            const origin = weightedPick(origins);
+            const target = weightedPick(targets);
+            srcCode = origin.originCountryAlpha2 || origin.clientCountryAlpha2;
+            srcName = origin.originCountryName;
+            dstCode = target.targetCountryAlpha2 || target.clientCountryAlpha2;
+            dstName = target.targetCountryName;
+        } else {
+            return;
+        }
+
+        if (srcCode === dstCode) return;
+
+        const baseSrc = getCountryCoord(srcCode);
+        const baseDst = getCountryCoord(dstCode);
+
+        if (!baseSrc || !baseDst) return; // Skip if country coords not found
+
+        // Add jitter so multiple attacks between same countries don't strictly overlap
+        // +/- 2.5 degrees is roughly up to ~250km offset
+        const jitter = () => (Math.random() - 0.5) * 5;
+
+        const src = { lat: baseSrc.lat + jitter(), lng: baseSrc.lng + jitter() };
+        const dst = { lat: baseDst.lat + jitter(), lng: baseDst.lng + jitter() };
+
+        const vector = vectorList.length ? weightedPick(vectorList) : { name: 'UDP Flood' };
+        const id = `a${++_id}`;
+
+        // Color based on vector type
+        const hue = (vector.name.charCodeAt(0) * 7 + vector.name.length * 31) % 360;
+        const color = `hsla(${hue}, 80%, 60%, 0.7)`;
+        const colorFaint = `hsla(${hue}, 80%, 60%, 0.1)`;
+
+        const arc = {
+            id,
+            startLat: src.lat,
+            startLng: src.lng,
+            endLat: dst.lat,
+            endLng: dst.lng,
+            color: [color, colorFaint],
+        };
+
+        const point = {
+            id,
+            lat: dst.lat,
+            lng: dst.lng,
+            color,
+            size: 0.3 + Math.random() * 0.3,
+        };
+
+        const ring = {
+            id,
+            lat: dst.lat,
+            lng: dst.lng,
+            color,
+        };
+
+        setArcs(prev => [...prev.slice(-40), arc]); // Allow up to 40 arcs at once
+        setPoints(prev => [...prev.slice(-30), point]); // Allow up to 30 visible endpoints
+        setRings(prev => [...prev.slice(-15), ring]); // Allow up to 15 active rings
+
+        const eventData = {
+            id, srcCode, dstCode, srcName, dstName,
+            vector: vector.name,
+            color,
+            time: new Date(),
+        };
+
+        setLatest(eventData);
+        setEvents(prev => [eventData, ...prev].slice(0, 15)); // Show last 15 in the log
+    }, [attackPairs, origins, targets, vectorList]);
+
+    // Lifecycle
+    useEffect(() => {
+        const hasData = attackPairs.length > 0 || (origins.length > 0 && targets.length > 0);
+        if (!hasData) return;
+
+        timersRef.current.forEach(clearInterval);
+
+        const t1 = setInterval(spawn, 300); // 5x faster spawn rate (every 0.3s)
+
+        // Remove old arcs/rings slower to let them build up
+        const t2 = setInterval(() => {
+            setArcs(prev => prev.length > 25 ? prev.slice(1) : prev);
+            setRings(prev => prev.length > 10 ? prev.slice(1) : prev);
+        }, 3000);
+
+        // Let endpoints linger for a bit
+        const t3 = setInterval(() => {
+            setPoints(prev => prev.length > 20 ? prev.slice(1) : prev);
+        }, 4000);
+
+        timersRef.current = [t1, t2, t3];
+        return () => timersRef.current.forEach(clearInterval);
+    }, [attackPairs, origins, targets, spawn]);
+
+    const fmtTime = (d) => d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     return (
         <div
             ref={containerRef}
-            className="lg:col-span-2 border-r border-t border-typo-border/20 relative min-h-[600px] overflow-hidden bg-[#0B0E14] globe-container"
+            className="lg:col-span-2 border-r border-t border-typo-border/20 relative min-h-[650px] overflow-hidden bg-[#060a10] globe-container"
         >
-            {/* Attack info overlay */}
-            <div className="absolute top-0 left-0 right-0 p-8 flex justify-between items-start z-20 pointer-events-none">
+            {/* Overlay */}
+            <div className="absolute top-0 left-0 p-5 z-20 pointer-events-none">
                 <div className="pointer-events-auto">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="size-1.5 rounded-full bg-red-600 animate-pulse"></span>
-                        <span className="text-xs font-bold uppercase tracking-[0.2em] text-white">Attack Detected</span>
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="size-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-red-400/90">Live Attacks</span>
+                        <span className="text-[9px] text-white/30 font-mono ml-1">{arcs.length} active</span>
                     </div>
-                    <div className="font-mono text-[10px] text-white/80 space-y-1 bg-white/5 backdrop-blur-sm p-3 border border-white/10 inline-block">
-                        <div className="flex gap-4"><span className="text-white/50">SRC:</span> <span>192.168.1.X (CN)</span></div>
-                        <div className="flex gap-4"><span className="text-white/50">DST:</span> <span>10.0.0.X (US)</span></div>
-                        <div className="flex gap-4"><span className="text-white/50">TYPE:</span> <span className="font-bold">UDP FLOOD</span></div>
-                    </div>
+                    {latest && (
+                        <div className="font-mono text-[10px] space-y-1 bg-black/80 backdrop-blur-sm p-3 border border-white/[0.06] rounded-sm tracking-wide">
+                            <div className="flex gap-2">
+                                <span className="text-white/30 w-8">SRC</span>
+                                <span className="text-white/90">{latest.srcName}</span>
+                                <span className="text-white/20 text-[9px]">({latest.srcCode})</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <span className="text-white/30 w-8">DST</span>
+                                <span className="text-white/90">{latest.dstName}</span>
+                                <span className="text-white/20 text-[9px]">({latest.dstCode})</span>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <span className="text-white/30 w-8">ATK</span>
+                                <span className="font-semibold" style={{ color: latest.color }}>{latest.vector}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <button className="pointer-events-auto p-2 hover:bg-white/10 transition-colors border border-transparent hover:border-white/20 rounded">
-                    <span className="material-symbols-outlined text-white">fullscreen</span>
-                </button>
             </div>
 
             {/* Globe */}
             {Globe && (
                 <Globe
                     ref={globeEl}
-                    width={dimensions.width}
-                    height={dimensions.height}
+                    width={dims.width}
+                    height={dims.height}
                     globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
                     backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
-                    arcsData={finalArcs}
+
+                    // Arcs
+                    arcsData={arcs}
                     arcColor="color"
-                    arcDashLength={0.4}
+                    arcDashLength={0.5}
                     arcDashGap={0.2}
-                    arcDashAnimateTime={1500}
-                    arcStroke={0.5}
-                    atmosphereColor="rgba(255,255,255,0.15)"
-                    atmosphereAltitude={0.2}
+                    arcDashAnimateTime={1800}
+                    arcStroke={0.4}
+                    arcAltitudeAutoScale={0.3}
+
+                    // Dots
+                    pointsData={points}
+                    pointLat="lat"
+                    pointLng="lng"
+                    pointColor="color"
+                    pointAltitude={0.01}
+                    pointRadius="size"
+                    pointsMerge={false}
+
+                    // Rings
+                    ringsData={rings}
+                    ringLat="lat"
+                    ringLng="lng"
+                    ringColor={() => (t) => `rgba(255,100,100,${1 - t})`}
+                    ringMaxRadius={3}
+                    ringPropagationSpeed={2}
+                    ringRepeatPeriod={800}
+
+                    atmosphereColor="rgba(60,100,180,0.1)"
+                    atmosphereAltitude={0.12}
                     showGraticules={false}
                 />
             )}
 
-            {/* Legend */}
-            <div className="absolute bottom-8 left-8 z-20 flex gap-6">
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 border border-white bg-white"></div>
-                    <span className="text-[10px] uppercase tracking-wider font-medium text-white/80">Critical</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 border border-white bg-gray-400"></div>
-                    <span className="text-[10px] uppercase tracking-wider font-medium text-white/80">High</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 border border-white bg-transparent"></div>
-                    <span className="text-[10px] uppercase tracking-wider font-medium text-white/80">Normal</span>
+            {/* Event log */}
+            <div className="absolute bottom-5 left-5 z-20 pointer-events-none">
+                <div className="space-y-0.5">
+                    {events.map((e, i) => (
+                        <div
+                            key={e.id}
+                            className="font-mono text-[8px] flex items-center gap-1.5"
+                            style={{ opacity: 1 - i * 0.15 }}
+                        >
+                            <span className="text-white/20">{fmtTime(e.time)}</span>
+                            <span className="size-1.5 rounded-full" style={{ backgroundColor: e.color }} />
+                            <span className="text-white/50">{e.srcCode}</span>
+                            <span className="text-white/20">→</span>
+                            <span className="text-white/50">{e.dstCode}</span>
+                            <span className="text-white/25 truncate max-w-[100px]">{e.vector}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
