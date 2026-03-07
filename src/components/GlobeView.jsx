@@ -23,8 +23,9 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
     const [points, setPoints] = useState([]);
     const [rings, setRings] = useState([]);
     const [events, setEvents] = useState([]);
-    const [latest, setLatest] = useState(null);
     const timersRef = useRef([]);
+
+    // Removed Option 1 (Country Profile Panel) logic to improve performance
 
     useEffect(() => {
         import('react-globe.gl').then((mod) => setGlobe(() => mod.default));
@@ -139,7 +140,6 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
             time: new Date(),
         };
 
-        setLatest(eventData);
         setEvents(prev => [eventData, ...prev].slice(0, 15)); // Show last 15 in the log
     }, [attackPairs, origins, targets, vectorList]);
 
@@ -154,13 +154,13 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
 
         // Remove old arcs/rings slower to let them build up
         const t2 = setInterval(() => {
-            setArcs(prev => prev.length > 25 ? prev.slice(1) : prev);
-            setRings(prev => prev.length > 10 ? prev.slice(1) : prev);
+            setArcs(prev => prev.length > 40 ? prev.slice(1) : prev);
+            setRings(prev => prev.length > 15 ? prev.slice(1) : prev);
         }, 3000);
 
         // Let endpoints linger for a bit
         const t3 = setInterval(() => {
-            setPoints(prev => prev.length > 20 ? prev.slice(1) : prev);
+            setPoints(prev => prev.length > 30 ? prev.slice(1) : prev);
         }, 4000);
 
         timersRef.current = [t1, t2, t3];
@@ -174,96 +174,87 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
             ref={containerRef}
             className="lg:col-span-2 border-r border-t border-typo-border/20 relative min-h-[650px] overflow-hidden bg-[#060a10] globe-container"
         >
-            {/* Overlay */}
-            <div className="absolute top-0 left-0 p-5 z-20 pointer-events-none">
-                <div className="pointer-events-auto">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="size-1.5 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-red-400/90">Live Attacks</span>
-                        <span className="text-[9px] text-white/30 font-mono ml-1">{arcs.length} active</span>
+            {/* Option 2: NOC Threat Feed Sidebar (Removed Blur for Performance) */}
+            <div className="absolute top-0 left-0 bottom-0 w-80 bg-[#060a10] border-r border-white/10 z-20 flex flex-col pointer-events-auto shadow-2xl">
+                {/* Header & Latest */}
+                <div className="p-6 border-b border-white/10 bg-white/[0.02]">
+                    <div className="flex items-center gap-2">
+                        <span className="size-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-xs font-bold uppercase tracking-[0.2em] text-red-500">Threat Feed</span>
                     </div>
-                    {latest && (
-                        <div className="font-mono text-[10px] space-y-1 bg-black/80 backdrop-blur-sm p-3 border border-white/[0.06] rounded-sm tracking-wide">
-                            <div className="flex gap-2">
-                                <span className="text-white/30 w-8">SRC</span>
-                                <span className="text-white/90">{latest.srcName}</span>
-                                <span className="text-white/20 text-[9px]">({latest.srcCode})</span>
+                </div>
+
+                {/* Event Log */}
+                <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col justify-end relative">
+                    <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#060a10]/95 to-transparent z-10 pointer-events-none"></div>
+                    <div className="space-y-1.5 relative z-0">
+                        {events.map((e, i) => (
+                            <div
+                                key={e.id}
+                                className="font-mono text-[10px] flex items-center justify-between transition-opacity"
+                                style={{ opacity: Math.max(0.35, 1 - i * 0.08) }}
+                            >
+                                <div className="flex items-center gap-2.5 w-full">
+                                    <span className="text-white/40 w-12 shrink-0">{fmtTime(e.time)}</span>
+                                    <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-white/90">{e.srcCode}</span>
+                                        <span className="text-white/30">→</span>
+                                        <span className="text-white font-bold">{e.dstCode}</span>
+                                        <span className="text-white/80 font-medium truncate ml-auto uppercase tracking-wide">{e.vector}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-white/30 w-8">DST</span>
-                                <span className="text-white/90">{latest.dstName}</span>
-                                <span className="text-white/20 text-[9px]">({latest.dstCode})</span>
-                            </div>
-                            <div className="flex gap-2 items-center">
-                                <span className="text-white/30 w-8">ATK</span>
-                                <span className="font-semibold" style={{ color: latest.color }}>{latest.vector}</span>
-                            </div>
-                        </div>
-                    )}
+                        ))}
+                    </div>
                 </div>
             </div>
+
+
 
             {/* Globe */}
             {Globe && (
-                <Globe
-                    ref={globeEl}
-                    width={dims.width}
-                    height={dims.height}
-                    globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-                    backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+                <div className="absolute inset-0 pl-80">
+                    <Globe
+                        ref={globeEl}
+                        width={dims.width - 320}
+                        height={dims.height}
+                        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+                        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
 
-                    // Arcs
-                    arcsData={arcs}
-                    arcColor="color"
-                    arcDashLength={0.5}
-                    arcDashGap={0.2}
-                    arcDashAnimateTime={1800}
-                    arcStroke={0.4}
-                    arcAltitudeAutoScale={0.3}
+                        // Arcs
+                        arcsData={arcs}
+                        arcColor="color"
+                        arcDashLength={0.5}
+                        arcDashGap={0.2}
+                        arcDashAnimateTime={1800}
+                        arcStroke={0.5}
+                        arcAltitudeAutoScale={0.3}
 
-                    // Dots
-                    pointsData={points}
-                    pointLat="lat"
-                    pointLng="lng"
-                    pointColor="color"
-                    pointAltitude={0.01}
-                    pointRadius="size"
-                    pointsMerge={false}
+                        // Dots
+                        pointsData={points}
+                        pointLat="lat"
+                        pointLng="lng"
+                        pointColor="color"
+                        pointAltitude={0.01}
+                        pointRadius="size"
+                        pointsMerge={false}
 
-                    // Rings
-                    ringsData={rings}
-                    ringLat="lat"
-                    ringLng="lng"
-                    ringColor={() => (t) => `rgba(255,100,100,${1 - t})`}
-                    ringMaxRadius={3}
-                    ringPropagationSpeed={2}
-                    ringRepeatPeriod={800}
+                        // Rings
+                        ringsData={rings}
+                        ringLat="lat"
+                        ringLng="lng"
+                        ringColor={() => (t) => `rgba(255,100,100,${1 - t})`}
+                        ringMaxRadius={3}
+                        ringPropagationSpeed={2}
+                        ringRepeatPeriod={800}
 
-                    atmosphereColor="rgba(60,100,180,0.1)"
-                    atmosphereAltitude={0.12}
-                    showGraticules={false}
-                />
-            )}
-
-            {/* Event log */}
-            <div className="absolute bottom-5 left-5 z-20 pointer-events-none">
-                <div className="space-y-0.5">
-                    {events.map((e, i) => (
-                        <div
-                            key={e.id}
-                            className="font-mono text-[8px] flex items-center gap-1.5"
-                            style={{ opacity: 1 - i * 0.15 }}
-                        >
-                            <span className="text-white/20">{fmtTime(e.time)}</span>
-                            <span className="size-1.5 rounded-full" style={{ backgroundColor: e.color }} />
-                            <span className="text-white/50">{e.srcCode}</span>
-                            <span className="text-white/20">→</span>
-                            <span className="text-white/50">{e.dstCode}</span>
-                            <span className="text-white/25 truncate max-w-[100px]">{e.vector}</span>
-                        </div>
-                    ))}
+                        atmosphereColor="rgba(60,100,180,0.1)"
+                        atmosphereAltitude={0.12}
+                        showGraticules={false}
+                    />
                 </div>
-            </div>
+            )}
         </div>
     );
 }

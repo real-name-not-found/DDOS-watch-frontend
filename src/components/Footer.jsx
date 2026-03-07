@@ -5,7 +5,7 @@ export default function Footer() {
         <footer className="border-t border-typo-border mt-12 py-12 bg-typo-bg">
             <div className="max-w-[1600px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
                 <NavLink to="/" className="flex items-center gap-2">
-                    <h2 className="text-lg font-serif italic tracking-tight text-typo-text">DDoS Shield.</h2>
+                    <h2 className="text-lg font-serif italic tracking-tight text-typo-text">DDoS Watch.</h2>
                 </NavLink>
 
                 <div className="flex gap-8">

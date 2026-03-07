@@ -14,14 +14,10 @@ export default function Navbar() {
                 {/* Left: Logo + Nav */}
                 <div className="flex items-center gap-12">
                     <NavLink to="/" className="flex items-center gap-2 group">
-                        <div className="size-5 text-typo-text">
-                            <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 2L2 7L12 12L22 7L12 2Z" />
-                                <path d="M2 17L12 22L22 17" fill="none" stroke="currentColor" strokeWidth="2" />
-                                <path d="M2 12L12 17L22 12" fill="none" stroke="currentColor" strokeWidth="2" />
-                            </svg>
+                        <div className="h-10 md:h-12 w-10 md:w-12 flex-shrink-0">
+                            <img src="/ddos-big-logo-bgremover.png" alt="DDoS Watch Logo" className="w-full h-full object-contain" />
                         </div>
-                        <h2 className="text-2xl font-serif font-medium tracking-tight text-typo-text">DDoS Shield.</h2>
+                        <h2 className="text-2xl font-serif font-medium tracking-tight text-typo-text">DDoS Watch.</h2>
                     </NavLink>
 
                     <nav className="hidden md:flex items-center gap-8">

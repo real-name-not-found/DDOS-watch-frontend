@@ -48,6 +48,40 @@ export default function GlobalMap() {
         }
     };
 
+    const handleExport = () => {
+        if (!data) {
+            toast.warn('No data available to export yet.');
+            return;
+        }
+
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            period,
+            summary: {
+                totalOrigins: data.topOrigins?.length || 0,
+                totalTargets: data.topTargets?.length || 0,
+                totalAttackPairs: data.attackPairs?.length || 0
+            },
+            data: {
+                topOrigins: data.topOrigins,
+                topTargets: data.topTargets,
+                attackPairs: data.attackPairs,
+                attackVectors: data.attackVectors
+            }
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ddos-watch-report-${period}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('Data report downloaded successfully.');
+    };
+
     const fadeIn = {
         initial: { opacity: 0, y: 20 },
         animate: { opacity: 1, y: 0 },
@@ -74,7 +108,7 @@ export default function GlobalMap() {
                         </h1>
                     </div>
                     <p className="text-lg font-serif italic text-typo-text-light max-w-lg leading-relaxed">
-                        Real-time visualization of DDoS vectors. Analyzing <span className="text-typo-text not-italic font-medium">1.2M</span> events per second across global nodes.
+                        Real-time visualization of global DDoS threat vectors and active attack traffic across global nodes.
                     </p>
                 </div>
 
@@ -103,9 +137,12 @@ export default function GlobalMap() {
                             ))}
                         </div>
                     </div>
-                    <div className="flex-1 p-8 flex items-center justify-between group cursor-pointer hover:bg-typo-text hover:text-white transition-colors duration-300">
+                    <div
+                        onClick={handleExport}
+                        className="flex-1 p-8 flex items-center justify-between group cursor-pointer hover:bg-typo-text hover:text-white transition-colors duration-300"
+                    >
                         <span className="text-sm uppercase tracking-widest">Export Data Report</span>
-                        <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">download</span>
                     </div>
                 </div>
             </motion.div>
