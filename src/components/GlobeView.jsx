@@ -167,8 +167,6 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
         return () => timersRef.current.forEach(clearInterval);
     }, [attackPairs, origins, targets, spawn]);
 
-    const fmtTime = (d) => d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
     return (
         <div
             ref={containerRef}
@@ -195,7 +193,6 @@ export default function GlobeView({ attackPairs = [], origins = [], targets = []
                                 style={{ opacity: Math.max(0.35, 1 - i * 0.08) }}
                             >
                                 <div className="flex items-center gap-2.5 w-full">
-                                    <span className="text-white/40 w-12 shrink-0">{fmtTime(e.time)}</span>
                                     <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <span className="text-white/90">{e.srcCode}</span>
