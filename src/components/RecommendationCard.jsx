@@ -41,7 +41,7 @@ Is Whitelisted:   ${result.isWhitelisted === true ? 'Yes' : result.isWhitelisted
 Last Reported:    ${result.lastReportedAt ? new Date(result.lastReportedAt).toLocaleString() : 'Never'}
 
 ────────────────────────────────────────────────────────────────
- DATA SOURCE: ip-api (Geolocation)
+ DATA SOURCE: ipwho.is (Geolocation)
 ────────────────────────────────────────────────────────────────
 Country:          ${result.country || 'N/A'} (${result.countryCode || ''})
 Region:           ${result.regionName || 'N/A'} (${result.region || ''})

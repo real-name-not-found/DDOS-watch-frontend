@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 const dataSources = [
     { name: 'Cloudflare Radar', href: 'https://radar.cloudflare.com' },
     { name: 'AbuseIPDB', href: 'https://www.abuseipdb.com' },
-    { name: 'ip-api', href: 'https://ip-api.com' },
+    { name: 'ipwho.is', href: 'https://ipwhois.io/' },
 ];
 
 const repos = [
