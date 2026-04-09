@@ -1,11 +1,91 @@
 /**
- * Get threat level label and color based on score (0-100)
+ * Unified threat level based on AbuseIPDB score (0-100).
+ * This is the SINGLE source of truth for score → label mapping.
+ * Every component must use this instead of defining its own thresholds.
  */
 export const getThreatLevel = (score) => {
-    if (score >= 81) return { level: 'CRITICAL', color: '#9B2C2C', bg: 'bg-risk-critical' };
-    if (score >= 61) return { level: 'HIGH', color: '#C05621', bg: 'bg-risk-warning' };
-    if (score >= 31) return { level: 'MEDIUM', color: '#D69E2E', bg: 'bg-yellow-500' };
-    return { level: 'LOW', color: '#2F855A', bg: 'bg-risk-ok' };
+    if (score >= 80) return { level: 'CRITICAL', color: '#9B2C2C', bg: 'bg-risk-critical', textColor: 'text-risk-critical' };
+    if (score >= 60) return { level: 'HIGH', color: '#C05621', bg: 'bg-risk-warning', textColor: 'text-risk-warning' };
+    if (score >= 30) return { level: 'MODERATE', color: '#D69E2E', bg: 'bg-yellow-500', textColor: 'text-yellow-600' };
+    return { level: 'LOW', color: '#2F855A', bg: 'bg-risk-ok', textColor: 'text-risk-ok' };
+};
+
+/**
+ * Whitelisted-aware wrapper around getThreatLevel.
+ * Use this when displaying status for an IP that might be whitelisted.
+ */
+export const getAbuseStatus = (score, isWhitelisted) => {
+    if (isWhitelisted) return { level: 'WHITELISTED', color: '#2F855A', bg: 'bg-risk-ok', textColor: 'text-risk-ok' };
+    return getThreatLevel(score);
+};
+
+const isValidIPv4Address = (ip) => {
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipv4Regex.test(ip)) return false;
+    return ip.split('.').every((part) => Number(part) >= 0 && Number(part) <= 255);
+};
+
+const countIPv6Segments = (segments) => {
+    let total = 0;
+
+    for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+
+        if (!segment) {
+            return null;
+        }
+
+        if (segment.includes('.')) {
+            const isLastSegment = index === segments.length - 1;
+
+            if (!isLastSegment || !isValidIPv4Address(segment)) {
+                return null;
+            }
+
+            total += 2;
+            continue;
+        }
+
+        if (!/^[0-9a-fA-F]{1,4}$/.test(segment)) {
+            return null;
+        }
+
+        total += 1;
+    }
+
+    return total;
+};
+
+const isValidIPv6Address = (ip) => {
+    if (!ip.includes(':') || ip.includes(':::')) {
+        return false;
+    }
+
+    const doubleColonParts = ip.split('::');
+
+    if (doubleColonParts.length > 2) {
+        return false;
+    }
+
+    const headSegments = doubleColonParts[0] ? doubleColonParts[0].split(':') : [];
+    const tailSegments = doubleColonParts.length === 2 && doubleColonParts[1]
+        ? doubleColonParts[1].split(':')
+        : [];
+
+    const headCount = countIPv6Segments(headSegments);
+    const tailCount = countIPv6Segments(tailSegments);
+
+    if (headCount === null || tailCount === null) {
+        return false;
+    }
+
+    // Without "::" we need exactly 8 hextets. With "::" the compressed gap must
+    // stand in for at least one missing segment.
+    if (doubleColonParts.length === 1) {
+        return headCount === 8;
+    }
+
+    return headCount + tailCount < 8;
 };
 
 /**
@@ -36,15 +116,11 @@ export const formatDate = (dateStr) => {
  * Check if an IP address is valid (IPv4 or IPv6 including compressed forms)
  */
 export const isValidIP = (ip) => {
-    // IPv4: exactly 4 octets, each 0-255
-    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (ipv4Regex.test(ip)) {
-        return ip.split('.').every((part) => parseInt(part) >= 0 && parseInt(part) <= 255);
+    if (isValidIPv4Address(ip)) {
+        return true;
     }
-    // IPv6: full form, compressed (::), and mixed
-    const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-    const ipv6Full = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-    return ipv6Regex.test(ip) || ipv6Full.test(ip);
+
+    return isValidIPv6Address(ip);
 };
 
 /**

@@ -1,4 +1,5 @@
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { getAbuseStatus } from '../utils/helpers';
 
 export default function ThreatRadar({ result }) {
     const abuseScore = result?.abuseScore || 0;
@@ -6,6 +7,7 @@ export default function ThreatRadar({ result }) {
     const numDistinctUsers = result?.numDistinctUsers || 0;
     const isTor = result?.isTor ? 100 : 0;
     const isWhitelisted = result?.isWhitelisted === true;
+    const statusInfo = getAbuseStatus(abuseScore, isWhitelisted);
 
     // Normalize reports to 0-100 (cap at 500)
     const reportScore = Math.min(100, Math.round((totalReports / 500) * 100));
@@ -67,11 +69,15 @@ export default function ThreatRadar({ result }) {
                     </p>
                 </div>
                 {hasData && (
-                    <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${abuseScore >= 80 ? 'border-risk-critical text-risk-critical' :
-                            abuseScore >= 50 ? 'border-risk-warning text-risk-warning' :
-                                'border-neutral-300 text-neutral-400'
+                    <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${statusInfo.bg === 'bg-risk-critical'
+                            ? 'border-risk-critical text-risk-critical'
+                            : statusInfo.bg === 'bg-risk-warning'
+                                ? 'border-risk-warning text-risk-warning'
+                                : statusInfo.bg === 'bg-yellow-500'
+                                    ? 'border-yellow-500 text-yellow-600'
+                                    : 'border-neutral-300 text-neutral-400'
                         }`}>
-                        {abuseScore >= 80 ? 'Critical' : abuseScore >= 50 ? 'Warning' : 'Low Risk'}
+                        {statusInfo.level}
                     </span>
                 )}
             </div>

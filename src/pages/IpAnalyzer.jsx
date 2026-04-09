@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import RiskGauge from '../components/RiskGauge';
+import RiskGauge from '../components/RiskGaugeIntegrated';
 import IpDetailCard from '../components/IpDetailCard';
 import MlPredictionCard from '../components/MlPredictionCard';
 import AbuseCard from '../components/AbuseCard';
-import RecommendationCard from '../components/RecommendationCard';
+import RecommendationCard from '../components/RecommendationCardIntegrated';
 import MiniMap from '../components/MiniMap';
 import ThreatRadar from '../components/AttackFrequencyChart';
-import AnalysisHistoryTable from '../components/ReportsTable';
+import AnalysisHistoryTable from '../components/ReportsTableIntegrated';
 import { analyzeIP, getHistory } from '../services/api';
-import { isValidIP, isPrivateIP, getThreatLevel } from '../utils/helpers';
+import { isValidIP, isPrivateIP, getAbuseStatus } from '../utils/helpers';
 
 export default function IpAnalyzer() {
     const [ip, setIp] = useState('');
@@ -86,8 +86,13 @@ export default function IpAnalyzer() {
         }
     };
 
-    const riskScore = result?.abuseScore || 0;
-    const threatLevel = getThreatLevel(riskScore);
+    // The final gauge should show the provider-backed AbuseIPDB score, while the
+    // AI card remains visible as an advisory prediction.
+    const riskScore = result?.abuseScore ?? result?.finalRiskScore ?? 0;
+    const abuseStatus = getAbuseStatus(riskScore, result?.isWhitelisted);
+    const mlProbabilityText = typeof result?.mlMaliciousProbability === 'number'
+        ? `${(result.mlMaliciousProbability * 100).toFixed(2)}%`
+        : undefined;
 
     const fadeIn = {
         initial: { opacity: 0, y: 20 },
@@ -141,8 +146,8 @@ export default function IpAnalyzer() {
                 {/* Right: Risk Gauge */}
                 <RiskGauge
                     score={riskScore}
-                    trend={result ? `${riskScore > 50 ? '+' : '-'}${Math.abs(riskScore - 50)}%` : undefined}
-                    status={result ? threatLevel.level : undefined}
+                    probability={mlProbabilityText}
+                    statusInfo={result ? abuseStatus : undefined}
                 />
             </motion.div>
 
@@ -155,11 +160,12 @@ export default function IpAnalyzer() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-t border-l border-black bg-white">
                             <IpDetailCard data={result} />
-                            <MlPredictionCard />
+                            <MlPredictionCard result={result} />
                             <AbuseCard
                                 totalReports={result?.totalReports || 0}
                                 ipAddress={result?.ipAddress}
                                 data={{
+                                    abuseScore: result?.abuseScore,
                                     lastReportedAt: result?.lastReportedAt ? new Date(result.lastReportedAt).toLocaleString() : null,
                                     usageType: result?.usageType,
                                     domain: result?.domain,
