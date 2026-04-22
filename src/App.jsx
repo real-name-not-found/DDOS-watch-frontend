@@ -4,6 +4,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Layout from './components/Layout';
 import GlobalMap from './pages/GlobalMap';
 import IpAnalyzer from './pages/IpAnalyzer';
+import Intelligence from './pages/IntelligenceArticle';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<GlobalMap />} />
           <Route path="/ip-analyzer" element={<IpAnalyzer />} />
+          <Route path="/intelligence" element={<Intelligence />} />
         </Route>
       </Routes>
     </BrowserRouter>
