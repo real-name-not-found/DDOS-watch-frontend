@@ -15,6 +15,10 @@ export default function AbuseCard({ totalReports = 0, data, ipAddress }) {
                     <span className="text-sm text-neutral-500">Reports</span>
                 </div>
                 <div className="mt-6 space-y-3">
+                    <div className="flex justify-between items-center border-b border-black/10 pb-2">
+                        <span className="text-[10px] uppercase tracking-widest text-neutral-400">Abuse Score</span>
+                        <span className="font-sans text-sm">{data?.abuseScore ?? '—'} / 100</span>
+                    </div>
                     <div className="flex justify-between items-start border-b border-black/10 pb-2">
                         <span className="text-[10px] uppercase tracking-widest text-neutral-400 shrink-0">Last Reported</span>
                         <span className="font-sans text-sm text-right ml-4">{data?.lastReportedAt || '—'}</span>
@@ -56,7 +60,7 @@ export default function AbuseCard({ totalReports = 0, data, ipAddress }) {
                                             However, these same entities also provide cloud hosting, VPS, and email services that can be abused by malicious actors for phishing, spam, or DDoS attacks.
                                         </p>
                                         <p className="text-[10px] leading-relaxed text-white/60 italic">
-                                            A whitelisted IP does not guarantee safety — exercise caution when the IP originates from a shared hosting or cloud infrastructure.
+                                            In this dashboard, a whitelisted verdict is treated as the primary provider signal. The AI score remains visible for context, but the AbuseIPDB whitelist should take precedence in the final decision.
                                         </p>
                                         <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-black"></div>
                                     </div>
